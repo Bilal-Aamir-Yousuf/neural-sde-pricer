@@ -1,0 +1,101 @@
+
+======================================================================
+  Phase 1 — Data pipeline
+======================================================================
+[data] loaded cached prices (3272, 8) from prices.parquet
+[data] loaded cached options chain for SPY (1265 rows)
+train days=1762, regimes=['calm', 'crisis', 'bear'], chain rows=1265
+
+======================================================================
+  Phase 2-3 — Train the Neural SDE (Euler-Maruyama MLE)
+======================================================================
+[data] loaded cached prices (3272, 8) from prices.parquet
+  epoch    0  train NLL -2.0244  val NLL -2.0691
+  epoch   50  train NLL -2.7686  val NLL -3.1591
+  epoch  100  train NLL -2.7834  val NLL -3.1701
+  epoch  150  train NLL -2.7908  val NLL -3.1700
+  epoch  200  train NLL -2.7953  val NLL -3.1697
+  epoch  250  train NLL -2.7975  val NLL -3.1689
+  epoch  300  train NLL -2.7984  val NLL -3.1683
+  epoch  350  train NLL -2.7987  val NLL -3.1681
+  epoch  399  train NLL -2.7987  val NLL -3.1680
+[train] saved checkpoint -> neural_sde.pt (ref diffusion sigma~0.182, best val NLL -3.2013)
+[train] wrote training_loss.png
+[train] wrote learned_dynamics.png
+
+======================================================================
+  Phase 4 — Monte Carlo pricing + convergence
+======================================================================
+  european   PriceResult(price=2.9515, stderr=0.0144, N=40000)
+  asian      PriceResult(price=1.6635, stderr=0.0079, N=40000)
+  lookback   PriceResult(price=4.8666, stderr=0.0113, N=40000)
+  barrier    PriceResult(price=1.5116, stderr=0.0093, N=40000)
+  N=   500  price=2.5957  stderr=0.17363
+  N=  1000  price=3.2546  stderr=0.13591
+  N=  2000  price=2.9032  stderr=0.09049
+  N=  4000  price=3.0005  stderr=0.06588
+  N=  8000  price=2.8860  stderr=0.04521
+  N= 16000  price=2.9659  stderr=0.03261
+  N= 32000  price=2.9659  stderr=0.02306
+  N= 64000  price=2.9526  stderr=0.01632
+[mc] convergence slope d log(SE)/d log(N) = -0.496  (theory -0.5)
+[mc] wrote mc_convergence.png
+
+======================================================================
+  Phase 5 — Implied-volatility surface
+======================================================================
+[data] loaded cached options chain for SPY (1265 rows)
+[vol] model spot=34.2 (training-domain centre); market spot=737.5
+[vol] wrote vol_surface.png
+[vol] model short-maturity skew IV(0.9)-IV(1.1) = +0.882% (downside skew like real markets)
+[vol] model IV range: 16.5% - 20.7%
+
+======================================================================
+  Phase 6 — Greeks via adjoint (validation table)
+======================================================================
+
+Greeks @ S0=34.2, K=34.2, T=1.0, r=0.03, call  (N=20000 paths)
+Greek       adjoint   pathwise(AD)    finite-diff    |AD-FD|
+------------------------------------------------------------
+delta       0.58305        0.58363        0.58427   6.34e-04
+gamma           nan        0.06427        0.06789   3.62e-03
+vega        2.34714        2.38524        2.38523   9.69e-06
+rho        17.60333       17.58760       17.59050   2.90e-03
+theta           nan       -1.77489       -1.77489   1.75e-07
+
+======================================================================
+  Phase 7 — Benchmark across regimes
+======================================================================
+[regime] experiment spot S0=34.2 (Neural SDE training-domain centre)
+[data] loaded cached prices (3272, 8) from prices.parquet
+
+=== regime 'calm'  (realised vol 12.8%, 754 days) ===
+   Black-Scholes    RMSE = 0.0475
+   Heston (COS)     RMSE = 0.0065
+   Neural SDE       RMSE = 0.0328
+
+=== regime 'crisis'  (realised vol 48.8%, 104 days) ===
+   Black-Scholes    RMSE = 0.5900
+   Heston (COS)     RMSE = 0.0835
+   Neural SDE       RMSE = 0.5466
+
+=== regime 'bear'  (realised vol 24.2%, 251 days) ===
+   Black-Scholes    RMSE = 0.0749
+   Heston (COS)     RMSE = 0.0086
+   Neural SDE       RMSE = 0.0507
+
+================================================================
+REGIME COMPARISON — RMSE vs real (empirical) option prices
+================================================================
+regime     realised vol  Black-Scholes     Heston   Neural SDE
+--------------------------------------------------------------
+calm             12.8%         0.0475     0.0065       0.0328
+crisis           48.8%         0.5900     0.0835       0.5466
+bear             24.2%         0.0749     0.0086       0.0507
+
+[regime] wrote regime_comparison.md
+[regime] wrote regime_comparison.png
+
+======================================================================
+  DONE in 319s — see outputs/ for plots & tables
+======================================================================
