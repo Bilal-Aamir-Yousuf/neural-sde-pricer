@@ -51,6 +51,12 @@ REALIZED_VOL_WINDOW = 21          # rolling window for realized volatility
 RISK_FREE_RATE = 0.03             # default flat risk-free rate (annual)
 SEED = 42
 
+# --- Latent SDE extension (variational training) ---
+LATENT_WINDOW_LEN = 64            # observed-path window length (trading days)
+LATENT_WINDOW_STRIDE = 5          # window start spacing within each ticker
+KL_ANNEAL_EPOCHS = 30             # beta ramps 0 -> 1 linearly over this many epochs
+KL_COLLAPSE_THRESHOLD = 0.05      # warn if pathwise KL/window < this after annealing
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 DTYPE = torch.float64             # float64: pricing/Greeks need the precision
 
