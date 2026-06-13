@@ -197,12 +197,14 @@ def simulate_v1_physical(sde, y0, n_days, n_paths, seed=0):
 
 def simulate_latent_physical(model, n_days, n_paths, seed=0):
     g = torch.Generator().manual_seed(seed)
-    z = model.pz0_mean + model.pz0_logstd.exp() * torch.randn(
-        n_paths, model.latent_dim, dtype=DTYPE, generator=g)
     tr = torch.tensor(T_REF, dtype=DTYPE)
     sq = math.sqrt(DT)
-    path = [z[:, 0].clone()]
+    # p(z0) is built from nn.Parameters, so the whole simulation (init included)
+    # must sit under no_grad before we ever touch .numpy().
     with torch.no_grad():
+        z = model.pz0_mean + model.pz0_logstd.exp() * torch.randn(
+            n_paths, model.latent_dim, dtype=DTYPE, generator=g)
+        path = [z[:, 0].clone()]
         for _ in range(n_days):
             h, gg = model.h(tr, z), model.g(tr, z)
             z = z + h * DT + gg * sq * torch.randn(

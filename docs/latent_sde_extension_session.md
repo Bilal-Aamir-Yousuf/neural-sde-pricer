@@ -222,12 +222,44 @@ front, plus `pricing/latent_pricing.py` for part 3:
 3. **Regime RMSE** regenerated with a Latent SDE column under the same
    one-knob (vol-shift) protocol as v1.
 
-**Status note (faithful to the session):** the harness was built and
-syntax-ready, but its execution was deliberately deferred — first by the
-Q-measure design question (Stage 7), then by this export, which was requested
-*before anything else*. As of this document there are **no evaluation tables
-yet**; nothing here is invented to fill that gap. The only executed pricing
-validation is the martingale battery below.
+**Status note:** the harness was built mid-session and its execution deferred
+(first by the Q-measure design question in Stage 7, then by the export). It was
+run in a later turn of this session — one bug surfaced and was fixed (a grad
+leak: the latent prior-path simulation built `z0` from `nn.Parameter`s outside
+`no_grad` before calling `.numpy()`). Results below are the actual run; they are
+reported with no spin, including where the original model wins.
+
+**1. Out-of-sample NLL** (per daily increment, lower better): MLE exact
+conditional **−2.859** vs latent ELBO **−2.730** / IWAE-64 **−2.809**. The MLE
+model wins — though the comparison is not apples-to-apples (exact conditional
+density vs a lower bound on a joint likelihood that also pays for observation
+noise; the handicap is on the latent side).
+
+**2. Regime RMSE** vs empirical option prices (same single vol-level knob for
+both neural models):
+
+| Regime | Black-Scholes | Heston | Neural SDE (MLE) | Latent SDE |
+|---|---|---|---|---|
+| calm | 0.0475 | 0.0065 | 0.0322 | 0.1174 |
+| crisis | 0.5900 | 0.0835 | 0.5573 | 1.0808 |
+| bear | 0.0749 | 0.0086 | 0.0707 | 0.2969 |
+
+The latent model is the **worst of the four in every regime, worse than plain
+Black-Scholes.** Under one multiplicative knob and an unconditional prior `v0`,
+its smile is mis-shaped; the added flexibility hurt under this thin
+calibration. This is the clearest place the original model wins.
+
+**3. Path realism** (simulate from each prior vs real SPY 2017–22): real
+returns cluster (ACF|r|₁ ≈ 0.41) and are fat-tailed (excess kurtosis ≈ 13.4);
+both models are nearly memoryless (ACF ≈ 0.005–0.014) and near-Gaussian
+(kurtosis 0.30 MLE / 0.05 latent). The latent clusters *slightly* more than the
+MLE model but has *slightly* thinner tails — neither is close to real data.
+
+Honest summary: the latent model demonstrably learned a volatility state
+(+0.37 corr, arbitrage-free pricing verified) but does **not** beat the simpler
+MLE model on out-of-sample likelihood or regime pricing under the current
+training budget and one-knob calibration. The martingale battery (below) is the
+other executed validation.
 
 ## Stage 7 — Risk-neutral pricing with a latent vol state
 
@@ -285,5 +317,10 @@ trained checkpoint      E[disc S_T] =  99.9942   (stderr 0.0049, err = 1.20 se) 
 - Test suite: **33 passing** (25 pre-existing + 8 from this session).
 - Trained checkpoint: `outputs/checkpoints/latent_sde.pt` (best val −ELBO
   −172.81), plus `latent_training.png` / `latent_vol_tracking.png`.
-- Open next step: execute `analysis/eval_latent.py` and report the three-part
-  comparison against the v1 MLE model, spin-free.
+- Evaluation: executed (Stage 6 above). Headline finding, no spin — the
+  original MLE model wins on OOS likelihood and on regime pricing RMSE; the
+  latent model's genuine result is the interpretable, arbitrage-free vol state,
+  not better prices. Tables also saved to `outputs/eval_latent_results.md`.
+- Open next steps (to close the gap): calibrate the risk-neutral dynamics to an
+  option chain instead of one vol knob; condition `v0` on each regime's recent
+  window; consider correlated noise and `d > 2`.
